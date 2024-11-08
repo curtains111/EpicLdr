@@ -24,30 +24,6 @@ Visual Studio or any C/C++ compiler capable of building Windows applications.
 
 Administrative privileges to execute process injection.
 
-Installation
-
-Clone the repository:
-
-git clone https://github.com/yourusername/early-bird-injection.git
-
-Navigate to the project directory:
-
-cd early-bird-injection
-
-Build the project using your preferred C/C++ compiler.
-
-Usage
-
-Compile the code:
-
-cl /EHsc early_bird_injection.cpp
-
-or use your preferred build tool.
-
-Run the compiled executable:
-
-early_bird_injection.exe <path/to/shellcode.bin>
-
 Example
 
 ./early_bird_injection.exe shellcode.bin
